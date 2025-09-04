@@ -1,4 +1,4 @@
-# Quantum Identity System (MVP)
+# Zillionid - Quantum Identity System (MVP)
 
 ## 🔹 Overview
 This project is an **MVP for a quantum-resilient digital identity system**.  
