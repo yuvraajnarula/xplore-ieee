@@ -1,4 +1,7 @@
 cirq
 numpy
-secrets
 cryptography    
+fastapi
+pydantic
+uvicorn[standard]
+pandas

@@ -28,7 +28,7 @@ class SwarmCoordinator:
         trust_scores = [trust_engine.get_trust(i) for i in ids]
 
         avg_trust = sum(trust_scores) / len(trust_scores)
-        consensus = avg_trust > 0.7
+        consensus = avg_trust > 0.5
 
         return {
             "swarm_id": swarm_id,

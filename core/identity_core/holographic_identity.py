@@ -7,7 +7,7 @@ Handles holographic identity representation:
 """
 
 import numpy as np
-from quantum_engine import BiometricEncoder, fidelity 
+from core.quantum_engine.biometric_quantum import BiometricEncoder, fidelity 
 
 class HolographicIdentity:
     def __init__(
@@ -45,7 +45,7 @@ class HolographicIdentity:
         return fid 
 
     
-    def update_thrust(
+    def update_trust(
         self,
         trust_signal
     ):

@@ -1,35 +1,41 @@
-"""
-Computes dynamic trust scores:
-- Uses consensus agreement, biometric fidelity, witness validations
-- Produces adaptive trust weights per identity
-"""
-
-import numpy as np
-
+import math
+from typing import Dict, List
 
 class DynamicTrustEngine:
-    def __init__(self, decay: float = 0.95):
+    def __init__(self, decay: float = 0.9):
         self.decay = decay
-        self.trust_registry = {}
+        self._scores: Dict[str, float] = {}
 
-    def update_trust(self, identity_id, agreement_rate, bio_fid, witness_score):
+    def _entropy(self, values: List[float]) -> float:
         """
-        Aggregate trust components:
-        - agreement_rate: quantum consensus reliability (0..1)
-        - bio_fid: biometric fidelity (0..1)
-        - witness_score: external validator confidence (0..1)
+        Shannon entropy on normalized values.
+        Ensures higher uncertainty = higher entropy.
         """
-        base_score = 0.5 * agreement_rate + 0.3 * bio_fid + 0.2 * witness_score
-        prev_score = self.trust_registry.get(identity_id, 0.5)
+        # Normalize to probability distribution
+        total = sum(values)
+        if total == 0:
+            return 1.0  # max uncertainty
+        probs = [v / total for v in values if v > 0]
+        entropy = -sum(p * math.log2(p) for p in probs)
+        # normalize to [0,1]
+        return entropy / math.log2(len(values))
 
-        # Apply decay for temporal dynamics
-        new_score = self.decay * prev_score + (1 - self.decay) * base_score
-        self.trust_registry[identity_id] = new_score
-        return new_score
 
-    def get_trust(self, identity_id):
-        return self.trust_registry.get(identity_id, 0.0)
+    def update_trust(self, identity_id: str, agreement: float, biometric: float, witness: float) -> tuple[float, float]:
+        base_score = (0.5 * agreement) + (0.3 * biometric) + (0.2 * witness)
+
+        entropy = self._entropy([agreement, biometric, witness])
+        entropy_factor = 1.0 - (0.1 * entropy)
+        new_score = base_score * (0.7 + 0.3 * entropy_factor)
+
+        prev = self._scores.get(identity_id, new_score)
+        updated = (self.decay * prev) + ((1 - self.decay) * new_score)
+
+        self._scores[identity_id] = updated
+        return updated, entropy
+
+    def get_trust(self, identity_id: str) -> float:
+        return self._scores.get(identity_id, 0.0)
 
     def rank_identities(self):
-        """Return identities ranked by trust"""
-        return sorted(self.trust_registry.items(), key=lambda x: x[1], reverse=True)
+        return sorted(self._scores.items(), key=lambda kv: kv[1], reverse=True)
