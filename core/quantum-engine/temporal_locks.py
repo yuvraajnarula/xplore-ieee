@@ -29,7 +29,7 @@ class TemporalLockManager:
         except ValueError:
             raise ValueError(f"Invalid ISO datetime: {unlock_time}")
 
-    def add_rltv_block(self,shard_idx,duration):
+    def add_rltv_lock(self,shard_idx,duration):
         now = datetime.now()
         unlock_time = now + timedelta(seconds=duration)
         self.locks[shard_idx] = unlock_time

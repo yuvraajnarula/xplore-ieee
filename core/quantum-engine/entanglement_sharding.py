@@ -144,21 +144,3 @@ class EntangledShardsSystem:
         """
         for shard in self.shards:
             print(f"Shard {shard.id} holds qubit {shard.qubit}")
-
-
-
-if __name__ == "__main__":
-    system = EntangledShardsSystem(
-        num_shards=3,
-        basis="Z",
-        tamper=(1,), 
-        depolarizing_prob=0.02,
-        repetitions=1000
-    )
-    system.describe()
-    results = system.run()
-
-    print("\n--- Measurement Report ---")
-    for k, v in results.items():
-        print(f"{k}: {v}")
-
