@@ -1,1 +1,3 @@
 from .entanglement_sharding import EntangledShardsSystem 
+from .temporal_locks import TemporalLockManager
+from .biometric_quantum import BiometricEncoder,fidelity

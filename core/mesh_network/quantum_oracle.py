@@ -9,10 +9,11 @@ nonces, and returning metadata about entanglement offers
 nonces - > A nonce is a random or pseudo-random, "number used once" in a cryptographic context to ensure that each
 communication or operation is unique and prevent replay attacks. 
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Dict, Iterable, List, Optional, Tuple
 import secrets
 import time
+from ..quantum_engine.quantum_consensus import EntangledShardsSystem  
 @dataclass
 class EntanglementOffer : 
     """
@@ -37,13 +38,15 @@ class QuantumOracle:
     ):
         self.offers = dict()
         self.nonces = dict()
+        self.ledger: List[EntanglementOffer] = []  
     
     def create_offer(
             self,
             shard_indxs,
             kind : str = 'ghz',
             ttl_sec : int = 30,
-            run_quick_verify : bool = False 
+            run_quick_verify : bool = False,
+            persist: bool = True,
     ):
         if len(shard_indxs) < 2:
             raise ValueError("At least 2 shard indices are required for entanglement.")
@@ -64,23 +67,35 @@ class QuantumOracle:
         )
 
         if run_quick_verify:
-            try:
-                from ..quantum_engine import EntangledShardsSystem
-                engine = EntangledShardsSystem(
-                    num_shards=len(shard_indxs),
-                    basis='Z',
-                    repetitions=128,
-                    tamper=(),
-                    depolarizing_prob=0.8
-                )
-                rep = engine.run()
-                offer.verification_hint = {
+
+            if EntangledShardsSystem is not None:
+                try:
+                    engine = EntangledShardsSystem(
+                        num_shards=len(shard_indxs),
+                        basis="Z",
+                        repetitions=128,
+                        tamper=(),
+                        depolarizing_prob=0.0,
+                    )
+                    rep = engine.run()
+                    offer.verification_hint = {
                         "agreement_rate": rep.get("agreement_rate"),
                         "sample_histogram": dict(list(rep.get("bitstring_histogram", {}).items())[:3]),
-                }
-            except Exception as e:
-                offer.verification_hint = {"error": str(e)}
-                raise Exception(f'{e}')
+                    }
+                except Exception as exc:
+                    print("Quick verify failed: %s", exc)
+                    offer.verification_hint = {"error": str(exc)}
+        # register in live offers
+        self._offers[offer_id] = offer
+
+        # persist to ledger if requested
+        if persist:
+            self.ledger.append(offer)
+            print("Offer persisted to ledger: %s", offer_id)
+
+        print("Created entanglement offer %s for shards %s", offer_id, shard_indxs)
+        return offer
+
     def get_offer(
             self,
             offer_id
@@ -97,14 +112,22 @@ class QuantumOracle:
         return offer 
 
     def ls_offers(
-            self    
+            self,
+            page : int =1,
+            page_size : int = 10
     ):
-        now = time.time()
-        expiration = [oid for oid, o in self.offers.items() if now - o.created_at > o.ttl_secs]
-        for oid in expiration:
-            self.offers.pop(oid,None)
-        
-        return list(self.offers.values())
+        total = len(self.ledger)
+        if total == 0:
+            return {"page": page, "page_size": page_size, "total": 0, "offers": []}
+        # clamp page
+        page = max(1, int(page))
+        start = (page - 1) * page_size
+        end = start + page_size
+        slice_offers = self.ledger[start:end]
+        serialized = [asdict(o) for o in slice_offers]
+        return {"page": page, "page_size": page_size, "total": total, "offers": serialized}
+
+
     
     def issue_nonce(
             self,

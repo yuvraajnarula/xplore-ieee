@@ -1,3 +1,4 @@
 cirq
 numpy
 secrets
+cryptography    
