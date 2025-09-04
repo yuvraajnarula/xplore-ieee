@@ -23,6 +23,7 @@ npm install
 cd ../biometric-capture 
 npm install
 cd ../../verifier/quantum-verifier-portal
+npm install
 ```
 ```run
 (at root)
