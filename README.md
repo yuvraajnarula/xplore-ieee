@@ -28,7 +28,7 @@ npm install
 ```run
 (at root)
 uvicorn services.trust_calc.calc:app --host 0.0.0.0 --port 8001 --reload
-uvicorn services.quantum_oracle_api:app --host 0.0.0.0 --port 8001 --reload
+uvicorn services.quantum_oracle_api.server:app --host 0.0.0.0 --port 8002 --reload
 ```
 
 ##  Current MVP Scope
