@@ -47,6 +47,7 @@ class ConsensusCluster:
       self.init_node_keys()
       self.lock_mgr: Optional[TemporalLockManager] = None
       self.encoder: Optional[BiometricEncoder] = None
+      self.validator = WitnessValidator(num_shards=n_shards, expected_tolerance=expected_tolerance)
     
     def init_node_keys(
       self
