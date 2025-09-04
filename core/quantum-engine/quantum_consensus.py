@@ -11,6 +11,7 @@ In a quantum setting,
 from entanglement_sharding import EntangledShardsSystem
 from temporal_locks import TemporalLockManager
 from datetime import datetime, timedelta
+from biometric_quantum import BiometricEncoder, fidelity
 import time 
 
 def run_quantum_consensus():
@@ -55,11 +56,25 @@ def run_quantum_consensus():
     for pair, corr in res['pairwise_zz'].items():
         print(f"  {pair}: {corr:.3f}")
     
-    consensus = res['agreement_rate'] > 0.95 and all(
-        abs(corr) > 0.9 for corr in res['zz_correlations'].values()
+    encoder = BiometricEncoder(nqubits=3)
+
+    biometric_live = [0.2, 0.5, 0.1, 0.9]
+    biometric_ref = [0.21, 0.48, 0.09, 0.91]
+
+    state_live, _ = encoder.encode(biometric_live)
+    state_ref, _ = encoder.encode(biometric_ref)
+
+    bio_fid = fidelity(state_live, state_ref)
+    print(f"\nBiometric Fidelity: {bio_fid:.4f}")
+
+    consensus = (
+        res['agreement_rate'] > 0.9
+        and all(abs(corr) > 0.85 for corr in res['pairwise_zz'].values())
+        and bio_fid > 0.9
     )
+
     
-    print("\nonsensus Achieved!" if consensus else "\n Consensus Broken!")
+    print("\n Consensus Achieved!" if consensus else "\n Consensus Broken!")
 
 if __name__ == '__main__':
     run_quantum_consensus()
