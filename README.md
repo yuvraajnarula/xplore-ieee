@@ -105,7 +105,7 @@ uvicorn services.quantum_oracle_api.server:app --host 0.0.0.0 --port 8002 --relo
   "trust_score": 0.546,
   "updated_at": 1736050973.23
 }
-
+```
 ## folder structure
 quantum-identity-system/
 ├── core/
