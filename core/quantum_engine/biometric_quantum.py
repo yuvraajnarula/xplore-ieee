@@ -33,6 +33,17 @@ class BiometricEncoder:
             self,
             arr
     ):
+        """
+        nqubits -> 3
+        dimension -> 2**3-> 8
+        but the problem is the given biometirc let's say 5  for lengths
+        so that we need  3 need more 
+        hence we perform **padding** which is giving add extra space or elements
+        in this case 3
+        but lets say we had 10
+        we will take the first 8 elements then
+        
+        """
         if len(arr) >self.dim:
             arr = arr[:self.dim]
         
@@ -70,7 +81,7 @@ class BiometricEncoder:
 
 def fidelity(
         state_a,
-        state_b
+        state_b 
 ):
     """
     we're calculating the overlap between two quantum states.

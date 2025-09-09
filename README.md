@@ -105,3 +105,48 @@ uvicorn services.quantum_oracle_api.server:app --host 0.0.0.0 --port 8002 --relo
   "trust_score": 0.546,
   "updated_at": 1736050973.23
 }
+
+## folder structure
+quantum-identity-system/
+├── core/
+│   ├── quantum-engine/          # Qiskit-based quantum simulators
+│   │   ├── entanglement-sharding.py
+│   │   ├── temporal-locks.py
+│   │   ├── quantum-consensus.py
+│   │   └── biometric-quantum.py
+│   ├── mesh-network/            # QMesh implementation
+│   │   ├── quantum-oracle.py
+│   │   ├── consensus-cluster.py
+│   │   └── witness-validator.py
+│   └── identity-core/           # Core identity logic
+│       ├── holographic-identity.py
+│       ├── dynamic-trust.py
+│       └── swarm-coordinator.py
+├── blockchain/
+│   ├── contracts/
+│   │   ├── QuantumDIDRegistry.sol
+│   │   ├── TemporalCredentials.sol
+│   │   ├── TrustFabric.sol
+│   │   └── SwarmConsensus.sol
+│   └── quantum-web3/           # Quantum-enhanced Web3 interface
+├── services/
+│   ├── quantum-oracle-api/     # REST API for quantum operations
+│   ├── biometric-processor/    # Real-time biometric → quantum conversion
+│   ├── temporal-scheduler/     # Time-lock automation
+│   └── trust-calculator/       # Dynamic trust computation
+├── wallet/
+│   ├── quantum-wallet-ui/      # React app with quantum visualizations
+│   ├── holographic-renderer/   # 3D identity visualization
+│   └── biometric-capture/      # Camera/mic integration
+├── verifier/
+│   ├── quantum-verifier-portal/
+│   ├── offline-quantum-cache/   # Quantum state snapshots for offline use
+│   └── context-analyzer/        # Smart verification based on use case
+├── demos/
+│   ├── bb84-simulator/          # Visual QKD demonstration
+│   ├── identity-attack-sim/     # Show quantum attack resistance
+│   └── swarm-demo/              # Identity swarm visualization
+└── monitoring/
+    ├── quantum-metrics/         # Quantum-specific system monitoring
+    ├── trust-analytics/         # Trust pattern analysis
+    └── threat-prediction/       # ML-based threat forecasting

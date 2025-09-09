@@ -1,42 +1,365 @@
 import { useState } from "react";
 
-function App() {
+// Type definitions
+interface BiometricMetrics {
+  sharpness: string;
+  lighting: string;
+  contrast: string;
+  faceDetection: string;
+  noiseLevel: string;
+  resolution: string;
+}
+
+interface BiometricAnalysisResult {
+  fidelityScore: number;
+  metrics: BiometricMetrics;
+}
+
+interface QualityMetrics {
+  sharpness: number;
+  lighting: number;
+  contrast: number;
+  faceRegion: number;
+  noiseLevel: number;
+  resolution: number;
+}
+
+interface TrustComputationRequest {
+  identity_id: string;
+  agreement_rate: number;
+  biometric_fidelity: number;
+  witness_score: number;
+}
+
+interface TrustComputationResult {
+  identity_id: string;
+  trust_score: number;
+}
+
+// Comprehensive biometric image quality analyzer
+class BiometricAnalyzer {
+  static async analyzeFace(imageFile: File): Promise<BiometricAnalysisResult> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const analysis = this.performQualityAnalysis(imageData);
+          resolve(analysis);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = URL.createObjectURL(imageFile);
+    });
+  }
+  
+  static performQualityAnalysis(imageData: ImageData): BiometricAnalysisResult {
+    const { data: pixels, width, height } = imageData;
+    
+    // 1. Blur/Sharpness Detection (Laplacian variance)
+    const sharpness = this.calculateSharpness(pixels, width, height);
+    
+    // 2. Lighting Quality Assessment
+    const lighting = this.assessLighting(pixels, width, height);
+    
+    // 3. Contrast Analysis
+    const contrast = this.calculateContrast(pixels, width, height);
+    
+    // 4. Face Region Detection (simplified)
+    const faceRegion = this.detectFaceRegion(pixels, width, height);
+    
+    // 5. Noise Level Assessment
+    const noiseLevel = this.assessNoise(pixels, width, height);
+    
+    // 6. Resolution Quality
+    const resolution = this.assessResolution(width, height);
+    
+    // Combine all metrics into final fidelity score
+    const fidelityScore = this.computeFidelityScore({
+      sharpness,
+      lighting,
+      contrast,
+      faceRegion,
+      noiseLevel,
+      resolution
+    });
+    
+    return {
+      fidelityScore: Math.max(0, Math.min(1, fidelityScore)),
+      metrics: {
+        sharpness: sharpness.toFixed(3),
+        lighting: lighting.toFixed(3),
+        contrast: contrast.toFixed(3),
+        faceDetection: faceRegion.toFixed(3),
+        noiseLevel: noiseLevel.toFixed(3),
+        resolution: resolution.toFixed(3)
+      }
+    };
+  }
+  
+  static calculateSharpness(pixels: Uint8ClampedArray, width: number, height: number): number {
+    // Laplacian edge detection for sharpness
+    let variance = 0;
+    let count = 0;
+    
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        
+        // Convert to grayscale
+        const center = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
+        
+        // Laplacian kernel application
+        const neighbors = [
+          (pixels[((y-1) * width + x) * 4] + pixels[((y-1) * width + x) * 4 + 1] + pixels[((y-1) * width + x) * 4 + 2]) / 3,
+          (pixels[(y * width + (x-1)) * 4] + pixels[(y * width + (x-1)) * 4 + 1] + pixels[(y * width + (x-1)) * 4 + 2]) / 3,
+          (pixels[(y * width + (x+1)) * 4] + pixels[(y * width + (x+1)) * 4 + 1] + pixels[(y * width + (x+1)) * 4 + 2]) / 3,
+          (pixels[((y+1) * width + x) * 4] + pixels[((y+1) * width + x) * 4 + 1] + pixels[((y+1) * width + x) * 4 + 2]) / 3
+        ];
+        
+        const laplacian = Math.abs(-4 * center + neighbors.reduce((a, b) => a + b, 0));
+        variance += laplacian * laplacian;
+        count++;
+      }
+    }
+    
+    const sharpnessValue = Math.sqrt(variance / count);
+    return Math.min(sharpnessValue / 50, 1); // Normalize
+  }
+  
+  static assessLighting(pixels: Uint8ClampedArray, width: number, height: number): number {
+    let totalBrightness = 0;
+    let darkPixels = 0;
+    let brightPixels = 0;
+    const totalPixels = (width * height);
+    
+    for (let i = 0; i < pixels.length; i += 4) {
+      const brightness = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+      totalBrightness += brightness;
+      
+      if (brightness < 50) darkPixels++;
+      if (brightness > 200) brightPixels++;
+    }
+    
+    const avgBrightness = totalBrightness / totalPixels;
+    const darkRatio = darkPixels / totalPixels;
+    const brightRatio = brightPixels / totalPixels;
+    
+    // Good lighting: moderate average brightness, low dark/bright ratios
+    const brightnessScore = 1 - Math.abs(avgBrightness - 128) / 128;
+    const exposureScore = 1 - Math.max(darkRatio, brightRatio) * 2;
+    
+    return (brightnessScore + exposureScore) / 2;
+  }
+  
+  static calculateContrast(pixels: Uint8ClampedArray, width: number, height: number): number {
+    let min = 255, max = 0;
+    const histogram = new Array(256).fill(0);
+    
+    for (let i = 0; i < pixels.length; i += 4) {
+      const gray = Math.round((pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3);
+      histogram[gray]++;
+      min = Math.min(min, gray);
+      max = Math.max(max, gray);
+    }
+    
+    // RMS contrast calculation
+    let mean = 0;
+    let totalPixels = width * height;
+    
+    for (let i = 0; i < 256; i++) {
+      mean += i * histogram[i];
+    }
+    mean /= totalPixels;
+    
+    let variance = 0;
+    for (let i = 0; i < 256; i++) {
+      variance += histogram[i] * Math.pow(i - mean, 2);
+    }
+    variance /= totalPixels;
+    
+    const rmsContrast = Math.sqrt(variance);
+    return Math.min(rmsContrast / 70, 1); // Normalize
+  }
+  
+  static detectFaceRegion(pixels: Uint8ClampedArray, width: number, height: number): number {
+    // Simplified face detection using skin color detection
+    let skinPixels = 0;
+    let faceRegionPixels = 0;
+    
+    // Focus on center region where face is likely to be
+    const centerX = Math.floor(width / 2);
+    const centerY = Math.floor(height / 2);
+    const regionSize = Math.min(width, height) * 0.4;
+    
+    for (let y = Math.max(0, centerY - regionSize/2); y < Math.min(height, centerY + regionSize/2); y++) {
+      for (let x = Math.max(0, centerX - regionSize/2); x < Math.min(width, centerX + regionSize/2); x++) {
+        const idx = (y * width + x) * 4;
+        const r = pixels[idx];
+        const g = pixels[idx + 1];
+        const b = pixels[idx + 2];
+        
+        // Simple skin detection algorithm
+        if (this.isSkinColor(r, g, b)) {
+          skinPixels++;
+        }
+        faceRegionPixels++;
+      }
+    }
+    
+    const skinRatio = skinPixels / faceRegionPixels;
+    return Math.min(skinRatio * 3, 1); // Boost skin detection score
+  }
+  
+  static isSkinColor(r: number, g: number, b: number): boolean {
+    // Simplified skin color detection
+    return (
+      r > 95 && g > 40 && b > 20 &&
+      r > g && r > b &&
+      Math.abs(r - g) > 15 &&
+      Math.max(r, g, b) - Math.min(r, g, b) > 15
+    );
+  }
+  
+  static assessNoise(pixels: Uint8ClampedArray, width: number, height: number): number {
+    // Simple noise assessment using local variance
+    let totalVariance = 0;
+    let windowCount = 0;
+    const windowSize = 3;
+    
+    for (let y = windowSize; y < height - windowSize; y += windowSize) {
+      for (let x = windowSize; x < width - windowSize; x += windowSize) {
+        const windowVariance = this.calculateWindowVariance(pixels, width, x, y, windowSize);
+        totalVariance += windowVariance;
+        windowCount++;
+      }
+    }
+    
+    const avgVariance = totalVariance / windowCount;
+    const noiseScore = 1 - Math.min(avgVariance / 1000, 1); // Less variance = less noise
+    return noiseScore;
+  }
+  
+  static calculateWindowVariance(pixels: Uint8ClampedArray, width: number, centerX: number, centerY: number, size: number): number {
+    let sum = 0;
+    let sumSquared = 0;
+    let count = 0;
+    
+    for (let dy = -size; dy <= size; dy++) {
+      for (let dx = -size; dx <= size; dx++) {
+        const idx = ((centerY + dy) * width + (centerX + dx)) * 4;
+        const gray = (pixels[idx] + pixels[idx + 1] + pixels[idx + 2]) / 3;
+        sum += gray;
+        sumSquared += gray * gray;
+        count++;
+      }
+    }
+    
+    const mean = sum / count;
+    const variance = (sumSquared / count) - (mean * mean);
+    return variance;
+  }
+  
+  static assessResolution(width: number, height: number): number {
+    const totalPixels = width * height;
+    const megapixels = totalPixels / (1024 * 1024);
+    
+    // Biometric systems typically need at least 0.3MP for face recognition
+    if (megapixels >= 2.0) return 1.0;
+    if (megapixels >= 1.0) return 0.9;
+    if (megapixels >= 0.5) return 0.8;
+    if (megapixels >= 0.3) return 0.6;
+    return 0.3;
+  }
+  
+  static computeFidelityScore(metrics: QualityMetrics): number {
+    // Weighted combination of all quality metrics
+    const weights = {
+      sharpness: 0.25,    // Critical for feature extraction
+      lighting: 0.20,     // Important for consistent analysis
+      contrast: 0.15,     // Helps with feature definition
+      faceRegion: 0.20,   // Face detection confidence
+      noiseLevel: 0.10,   // Noise affects accuracy
+      resolution: 0.10    // Minimum quality threshold
+    };
+    
+    return (
+      metrics.sharpness * weights.sharpness +
+      metrics.lighting * weights.lighting +
+      metrics.contrast * weights.contrast +
+      metrics.faceRegion * weights.faceRegion +
+      metrics.noiseLevel * weights.noiseLevel +
+      metrics.resolution * weights.resolution
+    );
+  }
+}
+
+const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [identity, setIdentity] = useState("");
-  const [result, setResult] = useState<any>(null);
-  const [uploading, setUploading] = useState(false);
+  const [identity, setIdentity] = useState<string>("");
+  const [result, setResult] = useState<TrustComputationResult | null>(null);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [biometricAnalysis, setBiometricAnalysis] = useState<BiometricAnalysisResult | null>(null);
   const [hoveredInput, setHoveredInput] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!file || !identity) return;
     
     setUploading(true);
+    setBiometricAnalysis(null);
     
     try {
-      const buffer = await file.arrayBuffer();
-      const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const fid = hashArray[0] / 255; // crude pseudo-fidelity for demo
+      // Perform comprehensive biometric analysis
+      const analysis = await BiometricAnalyzer.analyzeFace(file);
+      setBiometricAnalysis(analysis);
+      
+      const requestBody: TrustComputationRequest = {
+        identity_id: identity,
+        agreement_rate: 0.95,
+        biometric_fidelity: analysis.fidelityScore, // Real biometric analysis
+        witness_score: 0.9,
+      };
       
       const res = await fetch("http://localhost:8001/compute-trust", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          identity_id: identity,
-          agreement_rate: 0.95,
-          biometric_fidelity: fid,
-          witness_score: 0.9,
-        }),
+        body: JSON.stringify(requestBody),
       });
       
-      setResult(await res.json());
+      const trustResult: TrustComputationResult = await res.json();
+      setResult(trustResult);
     } catch (error) {
       console.error("Failed to compute trust", error);
+      alert("Biometric analysis failed. Please try with a different image.");
     } finally {
       setUploading(false);
     }
-  }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const selectedFile = e.target.files?.[0] || null;
+    setFile(selectedFile);
+  };
+
+  const handleIdentityChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setIdentity(e.target.value);
+  };
 
   const styles = {
     container: {
@@ -49,51 +372,8 @@ function App() {
       padding: "2rem",
       fontFamily: "'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       position: "relative" as const,
-      overflow: "hidden",
+      overflow: "hidden" as const,
       width: '100%'
-    },
-    backgroundOrbs: {
-      position: "absolute" as const,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      pointerEvents: "none" as const,
-      zIndex: 0,
-    },
-    orb1: {
-      position: "absolute" as const,
-      top: "10%",
-      right: "15%",
-      width: "300px",
-      height: "300px",
-      borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(138, 43, 226, 0.4) 0%, rgba(138, 43, 226, 0.1) 50%, transparent 70%)",
-      filter: "blur(60px)",
-      animation: "float 8s ease-in-out infinite",
-    },
-    orb2: {
-      position: "absolute" as const,
-      bottom: "20%",
-      left: "10%",
-      width: "250px",
-      height: "250px",
-      borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(75, 0, 130, 0.3) 0%, rgba(75, 0, 130, 0.1) 50%, transparent 70%)",
-      filter: "blur(40px)",
-      animation: "float 6s ease-in-out infinite reverse",
-    },
-    orb3: {
-      position: "absolute" as const,
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      width: "400px",
-      height: "400px",
-      borderRadius: "50%",
-      background: "radial-gradient(circle, rgba(255, 107, 157, 0.2) 0%, rgba(255, 107, 157, 0.05) 50%, transparent 70%)",
-      filter: "blur(80px)",
-      animation: "float 10s ease-in-out infinite",
     },
     header: {
       textAlign: "center" as const,
@@ -103,18 +383,17 @@ function App() {
     },
     title: {
       fontSize: "3.5rem",
-      fontWeight: 700,
+      fontWeight: 700 as const,
       background: "linear-gradient(135deg, #8A2BE2 0%, #FF6B9D 50%, #00BFFF 100%)",
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "transparent",
       marginBottom: "0.5rem",
       letterSpacing: "-0.02em",
-      animation: "glow 3s ease-in-out infinite alternate",
     },
     subtitle: {
       fontSize: "1.2rem",
       color: "#B8B3E6",
-      fontWeight: 300,
+      fontWeight: 300 as const,
       opacity: 0.8,
     },
     formContainer: {
@@ -132,7 +411,7 @@ function App() {
     },
     formTitle: {
       fontSize: "1.5rem",
-      fontWeight: 600,
+      fontWeight: 600 as const,
       color: "#E8E3FF",
       marginBottom: "2rem",
       textAlign: "center" as const,
@@ -146,7 +425,7 @@ function App() {
     label: {
       display: "block",
       fontSize: "0.9rem",
-      fontWeight: 500,
+      fontWeight: 500 as const,
       color: "#B8B3E6",
       marginBottom: "0.5rem",
       letterSpacing: "0.02em",
@@ -182,7 +461,7 @@ function App() {
       transition: "all 0.3s ease",
       outline: "none",
       backdropFilter: "blur(10px)",
-      cursor: "pointer",
+      cursor: "pointer" as const,
       boxSizing: "border-box" as const,
     },
     fileInputHover: {
@@ -197,21 +476,21 @@ function App() {
       borderRadius: "12px",
       color: "#FFFFFF",
       fontSize: "1rem",
-      fontWeight: 600,
+      fontWeight: 600 as const,
       letterSpacing: "0.02em",
       textTransform: "uppercase" as const,
-      cursor: "pointer",
+      cursor: "pointer" as const,
       transition: "all 0.3s ease",
       boxShadow: "0 10px 30px rgba(138, 43, 226, 0.3)",
       position: "relative" as const,
-      overflow: "hidden",
+      overflow: "hidden" as const,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
     },
     buttonDisabled: {
       background: "rgba(255, 255, 255, 0.1)",
-      cursor: "not-allowed",
+      cursor: "not-allowed" as const,
       boxShadow: "none",
     },
     loadingSpinner: {
@@ -222,6 +501,19 @@ function App() {
       borderRadius: "50%",
       animation: "spin 1s linear infinite",
       marginRight: "0.5rem",
+    },
+    analysisContainer: {
+      width: "100%",
+      maxWidth: "500px",
+      background: "rgba(255, 255, 255, 0.05)",
+      backdropFilter: "blur(20px)",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
+      borderRadius: "20px",
+      padding: "2rem",
+      boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 100px rgba(255, 107, 157, 0.1)",
+      zIndex: 1,
+      position: "relative" as const,
+      marginBottom: "2rem",
     },
     resultContainer: {
       width: "100%",
@@ -234,11 +526,20 @@ function App() {
       boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 100px rgba(0, 255, 135, 0.1)",
       zIndex: 1,
       position: "relative" as const,
-      animation: "fadeInUp 0.6s ease forwards",
+    },
+    sectionTitle: {
+      fontSize: "1.3rem",
+      fontWeight: 600 as const,
+      color: "#E8E3FF",
+      marginBottom: "1.5rem",
+      textAlign: "center" as const,
+      background: "linear-gradient(135deg, #FF6B9D 0%, #8A2BE2 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
     },
     resultTitle: {
       fontSize: "1.3rem",
-      fontWeight: 600,
+      fontWeight: 600 as const,
       color: "#E8E3FF",
       marginBottom: "1.5rem",
       textAlign: "center" as const,
@@ -246,27 +547,34 @@ function App() {
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "transparent",
     },
-    resultItem: {
+    metricItem: {
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      padding: "1rem 0",
+      padding: "0.75rem 0",
       borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
     },
-    resultLabel: {
+    metricLabel: {
       color: "#B8B3E6",
-      fontSize: "0.95rem",
-      fontWeight: 500,
+      fontSize: "0.9rem",
+      fontWeight: 500 as const,
     },
-    resultValue: {
+    metricValue: {
       color: "#E8E3FF",
-      fontSize: "1rem",
-      fontWeight: 600,
+      fontSize: "0.95rem",
+      fontWeight: 600 as const,
       fontFamily: "'SF Mono', 'Monaco', 'Cascadia Code', monospace",
+    },
+    fidelityScore: {
+      fontSize: "1.8rem",
+      fontWeight: 700 as const,
+      background: "linear-gradient(135deg, #FF6B9D 0%, #8A2BE2 100%)",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
     },
     trustScore: {
       fontSize: "1.5rem",
-      fontWeight: 700,
+      fontWeight: 700 as const,
       background: "linear-gradient(135deg, #00FF87 0%, #60EFFF 100%)",
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "transparent",
@@ -274,16 +582,12 @@ function App() {
     badge: {
       padding: "0.5rem 1rem",
       borderRadius: "25px",
-      fontWeight: 600,
+      fontWeight: 600 as const,
       fontSize: "0.85rem",
       textTransform: "uppercase" as const,
       letterSpacing: "0.5px",
       border: "2px solid transparent",
-      transition: "all 0.3s ease",
-      boxShadow: "0 4px 15px rgba(0, 0, 0, 0.3)",
-      position: "relative" as const,
-      overflow: "hidden",
-      animation: "pulse 2s ease-in-out infinite",
+      textAlign: "center" as const,
     },
     trustedBadge: {
       background: "linear-gradient(135deg, #00FF87 0%, #60EFFF 100%)",
@@ -300,140 +604,28 @@ function App() {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
-    @keyframes glow {
-      0% { text-shadow: 0 0 20px rgba(138, 43, 226, 0.5), 0 0 40px rgba(138, 43, 226, 0.3); }
-      100% { text-shadow: 0 0 30px rgba(138, 43, 226, 0.8), 0 0 60px rgba(138, 43, 226, 0.4); }
-    }
-
-    @keyframes float {
-      0%, 100% { transform: translateY(0px) rotate(0deg); }
-      50% { transform: translateY(-20px) rotate(180deg); }
-    }
-
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 255, 135, 0.3); }
-      50% { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 30px rgba(0, 255, 135, 0.5); }
-    }
-
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .quantum-particle {
-      position: absolute;
-      width: 2px;
-      height: 2px;
-      background: #8A2BE2;
-      border-radius: 50%;
-      opacity: 0.6;
-      animation: quantumMove 10s linear infinite;
-    }
-
-    @keyframes quantumMove {
-      0% {
-        transform: translate(0, 100vh) scale(0);
-        opacity: 0;
-      }
-      10% {
-        opacity: 0.6;
-      }
-      90% {
-        opacity: 0.6;
-      }
-      100% {
-        transform: translate(100vw, 0) scale(1);
-        opacity: 0;
-      }
-    }
-
-    .form-input:focus {
-      border-color: rgba(138, 43, 226, 0.5) !important;
-      box-shadow: 0 0 20px rgba(138, 43, 226, 0.3) !important;
-      background: rgba(255, 255, 255, 0.08) !important;
-    }
-
-    .file-input:hover {
-      border-color: rgba(255, 107, 157, 0.5) !important;
-      background: rgba(255, 255, 255, 0.08) !important;
-    }
-
-    .upload-button:hover:not(:disabled) {
-      transform: translateY(-2px) !important;
-      box-shadow: 0 15px 40px rgba(138, 43, 226, 0.4) !important;
-    }
-
-    .upload-button:disabled {
-      background: rgba(255, 255, 255, 0.1) !important;
-      cursor: not-allowed !important;
-      box-shadow: none !important;
-      transform: none !important;
-    }
-
-    .scan-effect {
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(138, 43, 226, 0.3), transparent);
-      animation: scan 2s ease-in-out infinite;
-      pointer-events: none;
-    }
-
-    @keyframes scan {
-      0% { left: -100%; }
-      100% { left: 100%; }
-    }
   `;
 
   return (
     <>
       <style>{keyframes}</style>
       <div style={styles.container}>
-        {/* Background orbs */}
-        <div style={styles.backgroundOrbs}>
-          <div style={styles.orb1}></div>
-          <div style={styles.orb2}></div>
-          <div style={styles.orb3}></div>
-          {/* Quantum particles */}
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div
-              key={i}
-              className="quantum-particle"
-              style={{
-                left: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 10}s`,
-                animationDuration: `${8 + Math.random() * 4}s`,
-              }}
-            />
-          ))}
-        </div>
-
         <div style={styles.header}>
-          <h1 style={styles.title}>Biometric Capture</h1>
-          <p style={styles.subtitle}>Quantum Identity Verification</p>
+          <h1 style={styles.title}>Advanced Biometric Analysis</h1>
+          <p style={styles.subtitle}>Multi-Factor Quality Assessment</p>
         </div>
 
         <div style={styles.formContainer}>
-          <h2 style={styles.formTitle}>Neural Identity Scan</h2>
+          <h2 style={styles.formTitle}>Biometric Quality Scanner</h2>
           
-          <div>
+          <form onSubmit={handleSubmit}>
             <div style={styles.inputGroup}>
               <div style={styles.label}>Identity Signature</div>
               <input
                 type="text"
-                placeholder="Enter quantum identity ID"
+                placeholder="Enter identity ID"
                 value={identity}
-                onChange={(e) => setIdentity(e.target.value)}
-                className="form-input"
+                onChange={handleIdentityChange}
                 style={{
                   ...styles.input,
                   ...(hoveredInput === "identity" ? styles.inputFocus : {})
@@ -444,24 +636,18 @@ function App() {
             </div>
 
             <div style={styles.inputGroup}>
-              <div style={styles.label}>Biometric Data</div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="file-input"
-                  style={{
-                    ...styles.fileInput,
-                    ...(hoveredInput === "file" ? styles.fileInputHover : {})
-                  }}
-                  onMouseEnter={() => setHoveredInput("file")}
-                  onMouseLeave={() => setHoveredInput(null)}
-                />
-                {uploading && (
-                  <div className="scan-effect"></div>
-                )}
-              </div>
+              <div style={styles.label}>Biometric Image</div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                style={{
+                  ...styles.fileInput,
+                  ...(hoveredInput === "file" ? styles.fileInputHover : {})
+                }}
+                onMouseEnter={() => setHoveredInput("file")}
+                onMouseLeave={() => setHoveredInput(null)}
+              />
               {file && (
                 <p style={{ 
                   marginTop: "0.5rem", 
@@ -469,15 +655,14 @@ function App() {
                   color: "#00FF87",
                   fontWeight: 500
                 }}>
-                  ✓ {file.name} loaded
+                  ✓ {file.name} loaded ({(file.size / 1024).toFixed(1)} KB)
                 </p>
               )}
             </div>
 
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={!file || !identity || uploading}
-              className="upload-button"
               style={{
                 ...styles.button,
                 ...((!file || !identity || uploading) ? styles.buttonDisabled : {})
@@ -486,26 +671,69 @@ function App() {
               {uploading ? (
                 <>
                   <div style={styles.loadingSpinner}></div>
-                  Quantum Processing...
+                  Analyzing Biometrics...
                 </>
               ) : (
-                "◈ Initialize Trust Computation"
+                "◈ Perform Quality Analysis"
               )}
             </button>
-          </div>
+          </form>
         </div>
+
+        {biometricAnalysis && (
+          <div style={styles.analysisContainer}>
+            <h3 style={styles.sectionTitle}>✦ Biometric Quality Assessment</h3>
+            
+            <div style={{...styles.metricItem, borderBottom: "none", justifyContent: "center", paddingBottom: "1rem"}}>
+              <div style={{ textAlign: "center" }}>
+                <div style={styles.metricLabel}>Overall Fidelity Score</div>
+                <div style={styles.fidelityScore}>{biometricAnalysis.fidelityScore.toFixed(3)}</div>
+              </div>
+            </div>
+            
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Sharpness Quality</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.sharpness}</span>
+            </div>
+            
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Lighting Assessment</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.lighting}</span>
+            </div>
+            
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Contrast Analysis</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.contrast}</span>
+            </div>
+            
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Face Detection</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.faceDetection}</span>
+            </div>
+            
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Noise Level</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.noiseLevel}</span>
+            </div>
+            
+            <div style={{...styles.metricItem, borderBottom: "none"}}>
+              <span style={styles.metricLabel}>Resolution Quality</span>
+              <span style={styles.metricValue}>{biometricAnalysis.metrics.resolution}</span>
+            </div>
+          </div>
+        )}
 
         {result && (
           <div style={styles.resultContainer}>
-            <h3 style={styles.resultTitle}>✦ Quantum Analysis Complete</h3>
+            <h3 style={styles.resultTitle}>✦ Trust Computation Complete</h3>
             
-            <div style={styles.resultItem}>
-              <span style={styles.resultLabel}>Identity Verified</span>
-              <span style={styles.resultValue}>{result.identity_id}</span>
+            <div style={styles.metricItem}>
+              <span style={styles.metricLabel}>Identity Verified</span>
+              <span style={styles.metricValue}>{result.identity_id}</span>
             </div>
             
             <div style={{
-              ...styles.resultItem, 
+              ...styles.metricItem, 
               borderBottom: "none", 
               justifyContent: "center", 
               flexDirection: "column", 
@@ -518,61 +746,27 @@ function App() {
                 alignItems: "center", 
                 width: "100%" 
               }}>
-                <span style={styles.resultLabel}>Quantum Trust Score</span>
+                <span style={styles.metricLabel}>Final Trust Score</span>
                 <span style={styles.trustScore}>{result.trust_score.toFixed(3)}</span>
               </div>
               
-              <div style={{ textAlign: "center" }}>
+              <div style={{ textAlign: "center", marginTop: "1rem" }}>
                 {result.trust_score > 0.7 ? (
-                  <span style={{...styles.badge, ...styles.trustedBadge}}>
-                    <span style={{ position: "relative", zIndex: 1 }}>
-                      ✦ Quantum Verified
-                    </span>
-                  </span>
+                  <div style={{...styles.badge, ...styles.trustedBadge}}>
+                    ✦ Biometric Verified
+                  </div>
                 ) : (
-                  <span style={{...styles.badge, ...styles.lowTrustBadge}}>
-                    <span style={{ position: "relative", zIndex: 1 }}>
-                      ⚠ Trust Threshold Not Met
-                    </span>
-                  </span>
+                  <div style={{...styles.badge, ...styles.lowTrustBadge}}>
+                    ⚠ Quality Threshold Not Met
+                  </div>
                 )}
               </div>
             </div>
           </div>
         )}
-
-        {/* Quantum grid overlay */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "200px",
-            background: `
-              linear-gradient(90deg, transparent 0%, rgba(138, 43, 226, 0.1) 50%, transparent 100%),
-              repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 20px,
-                rgba(138, 43, 226, 0.05) 21px,
-                rgba(138, 43, 226, 0.05) 21px
-              ),
-              repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 20px,
-                rgba(138, 43, 226, 0.05) 21px,
-                rgba(138, 43, 226, 0.05) 21px
-              )
-            `,
-            opacity: 0.3,
-            zIndex: 0,
-          }}
-        />
       </div>
     </>
   );
-}
+};
 
 export default App;
