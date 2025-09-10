@@ -107,6 +107,7 @@ uvicorn services.quantum_oracle_api.server:app --host 0.0.0.0 --port 8002 --relo
 }
 ```
 ## folder structure
+```
 quantum-identity-system/
 ├── core/
 │   ├── quantum-engine/          # Qiskit-based quantum simulators
@@ -150,3 +151,4 @@ quantum-identity-system/
     ├── quantum-metrics/         # Quantum-specific system monitoring
     ├── trust-analytics/         # Trust pattern analysis
     └── threat-prediction/       # ML-based threat forecasting
+```
