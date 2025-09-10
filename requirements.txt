@@ -5,3 +5,6 @@ fastapi
 pydantic
 uvicorn[standard]
 pandas
+sqlalchemy
+jose
+alembic
