@@ -8,3 +8,7 @@ pandas
 sqlalchemy
 jose
 alembic
+sqlmodel
+redis
+rq
+rq_scheduler

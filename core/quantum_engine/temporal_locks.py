@@ -48,3 +48,68 @@ class TemporalLockManager:
             if not self.is_locked(i, curr)
         ]
 
+
+from datetime import datetime
+from typing import Dict, Any, Optional
+class TemporalSchedulerService:
+    """
+    Service layer for managing temporal locks over shards.
+    Provides an API to release/add locks based on incoming payloads.
+    """
+
+    def __init__(self):
+        self.lock_manager = TemporalLockManager()
+
+    def release_time_lock(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Register a temporal lock based on payload.
+
+        Expected payload:
+        {
+            "shard_idx": int,
+            "mode": "abs" | "rltv",
+            "unlock_time": "YYYY-MM-DDTHH:MM:SS"  # required if abs
+            "duration": int  # required if rltv, seconds
+        }
+        """
+        shard_idx: Optional[int] = payload.get("shard_idx")
+        mode: Optional[str] = payload.get("mode")
+
+        if shard_idx is None or mode not in {"abs", "rltv"}:
+            print("Invalid payload: %s", payload)
+            return {
+                "success": False,
+                "message": "Invalid payload: shard_idx and mode are required",
+            }
+
+        try:
+            if mode == "abs":
+                unlock_time = payload.get("unlock_time")
+                if not unlock_time:
+                    raise ValueError("unlock_time required for abs mode")
+                self.lock_manager.add_abs_lock(shard_idx, unlock_time)
+                print("Absolute lock added for shard %s until %s", shard_idx, unlock_time)
+
+            elif mode == "rltv":
+                duration = payload.get("duration")
+                if duration is None:
+                    raise ValueError("duration required for rltv mode")
+                self.lock_manager.add_rltv_lock(shard_idx, duration)
+                print("Relative lock added for shard %s for %s seconds", shard_idx, duration)
+
+            return {
+                "success": True,
+                "message": f"Lock registered for shard {shard_idx} in {mode} mode",
+                "data": {
+                    "shard_idx": shard_idx,
+                    "mode": mode,
+                    "unlock_at": str(self.lock_manager.locks.get(shard_idx))
+                },
+            }
+
+        except Exception as e:
+            print("Failed to add lock for shard %s", shard_idx)
+            return {
+                "success": False,
+                "message": str(e),
+            }
