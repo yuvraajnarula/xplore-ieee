@@ -9,7 +9,7 @@ Endpoints:
 """
 
 from __future__ import annotations
-import os, time, logging
+import os, time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -18,6 +18,11 @@ from typing import Dict, List, Optional
 from core.identity_core.dynamic_trust import DynamicTrustEngine
 
 from blockchain.web3.trust_fabric_cli import TrustFabricClient
+from prometheus_client import Counter, Gauge
+from monitoring.ml import ml_detector
+# Prometheus metrics
+TRUST_UPDATES = Counter("trust_updates_total", "Total number of trust score updates")
+LOW_TRUST_ALERTS = Gauge("low_trust_alerts", "Current number of low-trust identities")
 
 app = FastAPI(title="Trust Calculator")
 
@@ -54,12 +59,14 @@ class BulkUpdateItem(BaseModel):
     biometric_fidelity: float
     witness_score: float
 
-# --- State ---
 _last_updated: Dict[str, float] = {}
 engine = DynamicTrustEngine(decay=0.9)
 
+from .repo import TrustRepo
 
-# --- Blockchain hook ---
+DB_URL = os.getenv("DATABASE_URL")
+trust_repo = TrustRepo(DB_URL)
+
 def push_trust_on_chain(identity_id: str, score: float, entropy: float) -> Optional[str]:
     try:
         tx_hash = client.publish_trust(identity_id, score, entropy)
@@ -78,20 +85,27 @@ def compute(req: TrustReq):
         )
         _last_updated[req.identity_id] = time.time()
 
+        # Update Prometheus metrics
+        TRUST_UPDATES.inc()
+        if new_score < 0.5:
+            LOW_TRUST_ALERTS.inc()
+
+        # Update ML detector
+        ml_detector.add_record(req.identity_id, new_score, entropy)
+
         # Push to blockchain
         tx_hash = push_trust_on_chain(req.identity_id, new_score, entropy)
+        if tx_hash:
+            print("On-chain tx hash:", tx_hash)
 
         return TrustRes(
             identity_id=req.identity_id,
             trust_score=float(new_score),
             entropy=float(entropy),
             updated_at=_last_updated[req.identity_id],
-            tx_hash=tx_hash,
         )
     except Exception as exc:
-        print("Compute trust failed")
         raise HTTPException(status_code=500, detail=str(exc))
-
 
 @app.get("/trust/{identity_id}", response_model=TrustRes)
 def fetch_trust(identity_id: str):
@@ -120,7 +134,6 @@ def rank(top: Optional[int] = None):
         ranked = ranked[:int(top)]
     return {"total": len(ranked), "rank": [{"identity_id": k, "trust_score": v} for k, v in ranked]}
 
-
 @app.post("/bulk-update")
 def bulk_update(items: List[BulkUpdateItem]):
     results = []
@@ -131,6 +144,15 @@ def bulk_update(items: List[BulkUpdateItem]):
             )
             _last_updated[it.identity_id] = time.time()
 
+            # Update Prometheus metrics
+            TRUST_UPDATES.inc()
+            if score < 0.5:
+                LOW_TRUST_ALERTS.inc()
+
+            # Update ML detector
+            ml_detector.add_record(it.identity_id, score, entropy)
+
+            # Push to blockchain
             tx_hash = push_trust_on_chain(it.identity_id, score, entropy)
 
             results.append({
@@ -140,6 +162,5 @@ def bulk_update(items: List[BulkUpdateItem]):
                 "tx_hash": tx_hash,
             })
         except Exception as exc:
-            print(f"Bulk update failed for {it.identity_id}")
             results.append({"identity_id": it.identity_id, "error": str(exc)})
     return {"results": results}

@@ -14,3 +14,6 @@ rq
 rq_scheduler
 web3
 eth-account
+psycopg2    
+prometheus_client
+scikit-learn
