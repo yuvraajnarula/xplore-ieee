@@ -12,3 +12,5 @@ sqlmodel
 redis
 rq
 rq_scheduler
+web3
+eth-account
