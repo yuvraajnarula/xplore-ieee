@@ -1,23 +1,25 @@
 version: '3.8'
 
 services:
-  # Database Services
-  postgres:
-    image: postgres:15-alpine
+  # Database Services (MySQL)
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-quantum_identity}
-      POSTGRES_USER: ${POSTGRES_USER:-quantum_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantum_pass}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-quantum_identity}
+      MYSQL_USER: ${MYSQL_USER:-quantum_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-quantum_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass}
+    command: ["--default-authentication-plugin=mysql_native_password"]
     ports:
-      - "5432:5432"
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-mysql.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quantum_user} -d ${POSTGRES_DB:-quantum_identity}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p${MYSQL_ROOT_PASSWORD:-root_pass} --silent"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -40,13 +42,13 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-quantum_user}:${MYSQL_PASSWORD:-quantum_pass}@mysql:3306/${MYSQL_DATABASE:-quantum_identity}
       - REDIS_URL=redis://redis:6379
       - ETH_RPC_URL=${ETH_RPC_URL}
       - ORACLE_PRIVATE_KEY=${ORACLE_PRIVATE_KEY}
       - TRUSTFABRIC_CONTRACT=${TRUSTFABRIC_CONTRACT}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -66,9 +68,9 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-quantum_user}:${MYSQL_PASSWORD:-quantum_pass}@mysql:3306/${MYSQL_DATABASE:-quantum_identity}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/docs"]
@@ -84,13 +86,13 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-quantum_user}:${MYSQL_PASSWORD:-quantum_pass}@mysql:3306/${MYSQL_DATABASE:-quantum_identity}
       - REDIS_URL=redis://redis:6379
       - SECRET_KEY=${SECRET_KEY}
       - WEB3_PROVIDER_URL=${ETH_RPC_URL}
       - CONTRACT_ADDRESS=${TRUSTFABRIC_CONTRACT}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -108,9 +110,9 @@ services:
     ports:
       - "8004:8004"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - DATABASE_URL=mysql+pymysql://${MYSQL_USER:-quantum_user}:${MYSQL_PASSWORD:-quantum_pass}@mysql:3306/${MYSQL_DATABASE:-quantum_identity}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8004/docs"]
@@ -126,10 +128,10 @@ services:
     ports:
       - "8005:8005"
     environment:
-      - DB_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - DB_URL=mysql+pymysql://${MYSQL_USER:-quantum_user}:${MYSQL_PASSWORD:-quantum_pass}@mysql:3306/${MYSQL_DATABASE:-quantum_identity}
       - key=${SECRET_KEY}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8005/docs"]
@@ -182,6 +184,6 @@ services:
       - grafana_data:/var/lib/grafana
 
 volumes:
-  postgres_data:
+  mysql_data:
   redis_data:
   grafana_data:
