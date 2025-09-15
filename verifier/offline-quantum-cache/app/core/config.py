@@ -1,5 +1,4 @@
-from pydantic_settings import BaseSettings
-
+from pydantic import BaseSettings, ConfigDict, HttpUrl
 
 class Settings(BaseSettings):
     DB_URL : str 

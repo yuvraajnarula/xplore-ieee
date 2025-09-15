@@ -1,5 +1,5 @@
-from pydantic import AnyUrl
-from pydantic_settings import BaseSettings
+from pydantic import BaseSettings, ConfigDict, HttpUrl
+
 from typing import Optional
 
 class Settings(BaseSettings):
