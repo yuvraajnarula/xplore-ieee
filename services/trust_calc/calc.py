@@ -10,7 +10,7 @@ Endpoints:
 
 from __future__ import annotations
 import os, time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 from core.identity_core.dynamic_trust import DynamicTrustEngine
 
 from blockchain.web3.trust_fabric_cli import TrustFabricClient
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from monitoring.ml import ml_detector
 # Prometheus metrics
 TRUST_UPDATES = Counter("trust_updates_total", "Total number of trust score updates")
@@ -164,3 +164,8 @@ def bulk_update(items: List[BulkUpdateItem]):
         except Exception as exc:
             results.append({"identity_id": it.identity_id, "error": str(exc)})
     return {"results": results}
+
+@app.get("/metrics")
+def metrics():
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)

@@ -21,6 +21,8 @@ from core.identity_core.holographic_identity import HolographicIdentity
 from core.quantum_engine.biometric_quantum import BiometricEncoder, fidelity
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import Gauge, Counter, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
 
 
 app = FastAPI(title="Quantum Oracle API (mock)", version="0.1")
@@ -193,3 +195,16 @@ def verify_nonce(req: VerifyNonceRequest):
     # consume
     _NONCES.pop(req.nonce, None)
     return {"valid": True}
+
+# --- Prometheus metrics endpoint ---
+_REQS = Counter("oracle_requests_total", "Total requests", ["route"]) 
+_NONCES = Gauge("oracle_nonces_active", "Active nonces")
+
+@app.get("/metrics")
+def metrics():
+    try:
+        _NONCES.set(len(_NONCES._value.get() if hasattr(_NONCES, "_value") else []))
+    except Exception:
+        pass
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)

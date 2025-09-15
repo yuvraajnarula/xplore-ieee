@@ -27,7 +27,7 @@ cp env.example .env
 
 # 3. Start all services
 docker-compose build
-docker-compose up -d
+docker-compose up 
 
 # 4. Access the applications
 # - Quantum Wallet UI: http://localhost:3000

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, status
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
 from .config import settings
 from .schemas import TimelockCreate, TimelockResponse
 from .crud import TimelockRepo
@@ -83,3 +85,7 @@ def cancel_timelock(id: int, admin=Depends(get_current_admin)):
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host=settings.APP_HOST, port=settings.APP_PORT, reload=False)
+
+@app.get("/metrics")
+def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

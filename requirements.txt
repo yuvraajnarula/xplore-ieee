@@ -3,6 +3,7 @@ numpy
 cryptography    
 fastapi
 pydantic
+pydantic-settings
 uvicorn[standard]
 pandas
 sqlalchemy

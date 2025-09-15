@@ -104,7 +104,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["python", "-m", "uvicorn", "verifier.context-analyser.server:app", "--host", "0.0.0.0", "--port", "8004"]
+    command: ["python", "-m", "uvicorn", "server:app", "--app-dir", "verifier/context-analyser", "--host", "0.0.0.0", "--port", "8004"]
     ports:
       - "8004:8004"
     environment:
@@ -122,7 +122,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.python
-    command: ["python", "-m", "uvicorn", "verifier.offline-quantum-cache.app.main:app", "--host", "0.0.0.0", "--port", "8005"]
+    command: ["python", "-m", "uvicorn", "app.main:app", "--app-dir", "verifier/offline-quantum-cache", "--host", "0.0.0.0", "--port", "8005"]
     ports:
       - "8005:8005"
     environment:
