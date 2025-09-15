@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quantum_identity}
+      POSTGRES_USER: ${POSTGRES_USER:-quantum_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantum_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quantum_user} -d ${POSTGRES_DB:-quantum_identity}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Python Services
+  trust-calculator:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "uvicorn", "services.trust_calc.calc:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - REDIS_URL=redis://redis:6379
+      - ETH_RPC_URL=${ETH_RPC_URL}
+      - ORACLE_PRIVATE_KEY=${ORACLE_PRIVATE_KEY}
+      - TRUSTFABRIC_CONTRACT=${TRUSTFABRIC_CONTRACT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./blockchain:/app/blockchain
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  quantum-oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "uvicorn", "services.quantum_oracle_api.server:app", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  temporal-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "uvicorn", "services.temporal_scheduler.app.main:app", "--host", "0.0.0.0", "--port", "8003"]
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=${SECRET_KEY}
+      - WEB3_PROVIDER_URL=${ETH_RPC_URL}
+      - CONTRACT_ADDRESS=${TRUSTFABRIC_CONTRACT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  context-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "uvicorn", "verifier.context-analyser.server:app", "--host", "0.0.0.0", "--port", "8004"]
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  offline-quantum-cache:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: ["python", "-m", "uvicorn", "verifier.offline-quantum-cache.app.main:app", "--host", "0.0.0.0", "--port", "8005"]
+    ports:
+      - "8005:8005"
+    environment:
+      - DB_URL=postgresql://${POSTGRES_USER:-quantum_user}:${POSTGRES_PASSWORD:-quantum_pass}@postgres:5432/${POSTGRES_DB:-quantum_identity}
+      - key=${SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend Applications
+  quantum-wallet-ui:
+    build:
+      context: ./wallet/quantum-wallet-ui
+      dockerfile: ../../Dockerfile.react
+    ports:
+      - "3100:80"
+
+  biometric-capture:
+    build:
+      context: ./wallet/biometric-capture
+      dockerfile: ../../Dockerfile.react
+    ports:
+      - "3101:80"
+
+  quantum-verifier-portal:
+    build:
+      context: ./verifier/quantum-verifier-portal
+      dockerfile: ../../Dockerfile.react
+    ports:
+      - "3102:80"
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3110:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:

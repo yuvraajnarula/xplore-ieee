@@ -1,0 +1,73 @@
+version: '3.8'
+
+# Development override for docker-compose.yml
+# Use: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Override Python services for development with hot reload
+  trust-calculator:
+    command: ["python", "-m", "uvicorn", "services.trust_calc.calc:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+
+  quantum-oracle:
+    command: ["python", "-m", "uvicorn", "services.quantum_oracle_api.server:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+
+  temporal-scheduler:
+    command: ["python", "-m", "uvicorn", "services.temporal_scheduler.app.main:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+
+  context-analyzer:
+    command: ["python", "-m", "uvicorn", "verifier.context-analyser.server:app", "--host", "0.0.0.0", "--port", "8004", "--reload"]
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+
+  offline-quantum-cache:
+    command: ["python", "-m", "uvicorn", "verifier.offline-quantum-cache.app.main:app", "--host", "0.0.0.0", "--port", "8005", "--reload"]
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONPATH=/app
+      - DEBUG=true
+
+  # Override React services for development with hot reload
+  quantum-wallet-ui:
+  build:
+    context: .
+    dockerfile: Dockerfile.react
+  ports:
+    - "3000:80"
+
+  biometric-capture:
+    build:
+      context: .
+      dockerfile: Dockerfile.react
+    ports:
+      - "3001:80"
+
+  quantum-verifier-portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.react
+    ports:
+      - "3002:80"

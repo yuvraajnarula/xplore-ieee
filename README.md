@@ -26,6 +26,7 @@ cp env.example .env
 # Edit .env with your configuration (see Environment Configuration section below)
 
 # 3. Start all services
+docker-compose build
 docker-compose up -d
 
 # 4. Access the applications
